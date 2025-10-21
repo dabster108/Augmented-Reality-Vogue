@@ -1,0 +1,169 @@
+// This file contains the JSX return statement for BodyTracking component
+// Replace "return <div>Test Component - See continuation below</div>;" with this:
+
+return (
+    <div style={styles.container}>
+      <div style={styles.header}>
+        <h1 style={styles.title}>🎯 Real-Time AR Body Tracking</h1>
+        <p style={styles.subtitle}>Powered by TensorFlow.js PoseNet with Temporal Smoothing</p>
+        {onClose && (
+          <button onClick={onClose} style={styles.closeButton}>
+            ← Back to Home
+          </button>
+        )}
+      </div>
+
+      <div style={styles.statusBar}>
+        <div style={styles.statusItem}>
+          <span style={styles.statusLabel}>Model Status:</span>
+          <span style={{
+            ...styles.statusValue,
+            color: modelError ? '#ff4444' : (modelLoaded ? '#00ff00' : '#ffaa00')
+          }}>
+            {modelError ? '❌ Error' : (modelLoaded ? '✅ Loaded' : '⏳ Loading...')}
+          </span>
+        </div>
+        <div style={styles.statusItem}>
+          <span style={styles.statusLabel}>Detection:</span>
+          <span style={{
+            ...styles.statusValue,
+            color: detecting ? '#00ff00' : '#888'
+          }}>
+            {detecting ? '🟢 Active' : '⚫ Paused'}
+          </span>
+        </div>
+        <div style={styles.statusItem}>
+          <span style={styles.statusLabel}>Smoothing:</span>
+          <span style={styles.statusValue}>
+            {SMOOTHING_WINDOW} frames
+          </span>
+        </div>
+      </div>
+
+      {modelError && (
+        <div style={styles.errorAlert}>
+          <h3 style={styles.errorTitle}>⚠️ Model Loading Failed</h3>
+          <p style={styles.errorText}>{modelError}</p>
+          <button onClick={() => window.location.reload()} style={styles.reloadButton}>
+            🔄 Reload Page
+          </button>
+        </div>
+      )}
+
+      {!modelLoaded && !modelError && (
+        <div style={styles.loadingAlert}>
+          <div style={styles.loadingSpinner}></div>
+          <p style={styles.loadingText}>
+            Loading PoseNet AI Model... This may take 10-30 seconds.
+          </p>
+          <p style={styles.loadingSubtext}>
+            Please wait until the model is fully loaded before starting detection.
+          </p>
+        </div>
+      )}
+
+      <div style={styles.videoContainer}>
+        <video ref={videoRef} style={styles.video} playsInline muted />
+        <canvas ref={canvasRef} style={styles.canvas} />
+      </div>
+
+      <div style={styles.legend}>
+        <h4 style={styles.legendTitle}>Color Legend:</h4>
+        <div style={styles.legendItems}>
+          {Object.entries(BODY_COLORS).map(([part, color]) => (
+            <div key={part} style={styles.legendItem}>
+              <div style={{ ...styles.colorBox, background: color.stroke }}></div>
+              <span>{part.replace(/([A-Z])/g, ' $1').trim()}: {color.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={styles.controls}>
+        <button
+          onClick={toggleDetection}
+          disabled={!modelLoaded}
+          style={{
+            ...styles.button,
+            ...(detecting ? styles.buttonStop : styles.buttonStart),
+            ...(modelLoaded ? {} : styles.buttonDisabled)
+          }}
+        >
+          {detecting ? '⏸ Stop Detection' : '▶️ Start Detection'}
+        </button>
+        <button onClick={clearLog} style={styles.buttonClear}>
+          🧹 Clear Log
+        </button>
+      </div>
+
+      <div style={styles.logContainer}>
+        <h3 style={styles.logTitle}>📊 Motion Log (Real-time)</h3>
+        <div style={styles.logContent}>
+          {motionLog.length === 0 ? (
+            <p style={styles.emptyLog}>
+              {detecting 
+                ? '👋 Move around to detect body movements...' 
+                : '▶️ Start detection to see motion logs'}
+            </p>
+          ) : (
+            motionLog.map((log, index) => (
+              <div key={index} style={styles.logItem}>
+                <span style={styles.logTimestamp}>{log.time}</span>
+                <span style={styles.logText}>{log.text}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div style={styles.info}>
+        <h3 style={styles.infoTitle}>💡 How to Use</h3>
+        <ul style={styles.infoList}>
+          <li>🎥 <strong>Camera:</strong> Make sure you're in a well-lit environment</li>
+          <li>👤 <strong>Position:</strong> Stand back so your full body is visible in the frame</li>
+          <li>🏃 <strong>Movement:</strong> Move slowly at first - larger movements are easier to detect</li>
+          <li>🖥️ <strong>Console:</strong> Press F12 to see detailed movement logs in browser console</li>
+          <li>🎯 <strong>Threshold:</strong> Movement must exceed {MOVEMENT_THRESHOLD}px to be detected (prevents false positives)</li>
+          <li>📈 <strong>Performance:</strong> Analysis runs every {FRAME_SKIP} frames for optimal speed</li>
+        </ul>
+      </div>
+
+      <div style={styles.technicalInfo}>
+        <h4 style={styles.technicalTitle}>⚙️ Technical Specifications</h4>
+        <div style={styles.specs}>
+          <div style={styles.spec}>
+            <strong>Model:</strong> PoseNet MobileNetV1
+          </div>
+          <div style={styles.spec}>
+            <strong>Keypoints:</strong> 17 body points detected
+          </div>
+          <div style={styles.spec}>
+            <strong>Confidence Threshold:</strong> {CONFIDENCE_THRESHOLD}
+          </div>
+          <div style={styles.spec}>
+            <strong>Movement Threshold:</strong> {MOVEMENT_THRESHOLD}px
+          </div>
+          <div style={styles.spec}>
+            <strong>Smoothing Window:</strong> {SMOOTHING_WINDOW} frames
+          </div>
+          <div style={styles.spec}>
+            <strong>Frame Analysis:</strong> Every {FRAME_SKIP} frames
+          </div>
+        </div>
+      </div>
+
+      <div style={styles.extensionsInfo}>
+        <h4 style={styles.extensionsTitle}>🚀 Ready for Extensions</h4>
+        <p style={styles.extensionsText}>
+          This application is structured for easy extension to:
+        </p>
+        <ul style={styles.extensionsList}>
+          <li>👕 <strong>Virtual Clothing Try-On:</strong> Use torso keypoints for garment alignment</li>
+          <li>💪 <strong>Fitness Tracking:</strong> Calculate joint angles and track exercise form</li>
+          <li>🎮 <strong>Gesture Control:</strong> Detect specific pose patterns for interactive experiences</li>
+          <li>🎭 <strong>AR Effects:</strong> Add virtual objects aligned with body parts</li>
+          <li>📊 <strong>Posture Analysis:</strong> Monitor and correct body posture in real-time</li>
+        </ul>
+      </div>
+    </div>
+  );
