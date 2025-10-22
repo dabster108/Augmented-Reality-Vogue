@@ -48,12 +48,12 @@ const BodyTracking = ({ onClose }) => {
   };
 
   const BODY_COLORS = {
-    head: { fill: 'rgba(255, 0, 0, 0.5)', stroke: '#ff0000', name: 'Red' },
-    leftArm: { fill: 'rgba(255, 0, 255, 0.5)', stroke: '#ff00ff', name: 'Magenta' },
-    rightArm: { fill: 'rgba(0, 255, 255, 0.5)', stroke: '#00ffff', name: 'Cyan' },
-    leftLeg: { fill: 'rgba(0, 255, 0, 0.5)', stroke: '#00ff00', name: 'Green' },
-    rightLeg: { fill: 'rgba(255, 255, 0, 0.5)', stroke: '#ffff00', name: 'Yellow' },
-    torso: { fill: 'rgba(255, 165, 0, 0.5)', stroke: '#ffa500', name: 'Orange' },
+    head: { fill: 'rgba(255, 0, 0, 0.7)', stroke: '#ff0000', name: 'Red' },
+    leftArm: { fill: 'rgba(255, 0, 255, 0.7)', stroke: '#ff00ff', name: 'Magenta' },
+    rightArm: { fill: 'rgba(0, 255, 255, 0.7)', stroke: '#00ffff', name: 'Cyan' },
+    leftLeg: { fill: 'rgba(0, 255, 0, 0.7)', stroke: '#00ff00', name: 'Green' },
+    rightLeg: { fill: 'rgba(255, 255, 0, 0.7)', stroke: '#ffff00', name: 'Yellow' },
+    torso: { fill: 'rgba(255, 165, 0, 0.7)', stroke: '#ffa500', name: 'Orange' },
   };
 
   useEffect(() => {
@@ -86,6 +86,7 @@ const BodyTracking = ({ onClose }) => {
     const loadModel = async () => {
       try {
         console.log('%c🚀 Loading PoseNet Model...', 'color: #00ff88; font-size: 18px; font-weight: bold;');
+        
         const net = await posenet.load({
           architecture: 'MobileNetV1',
           outputStride: 16,
@@ -244,6 +245,37 @@ const BodyTracking = ({ onClose }) => {
     previousKeypointsRef.current = currentParts;
   };
 
+  // OpenPose-style skeleton connections
+  const SKELETON_CONNECTIONS = [
+    // Face connections
+    { start: 0, end: 1, color: '#FF0000', name: 'nose-leftEye' },
+    { start: 0, end: 2, color: '#FF0000', name: 'nose-rightEye' },
+    { start: 1, end: 3, color: '#FF0000', name: 'leftEye-leftEar' },
+    { start: 2, end: 4, color: '#FF0000', name: 'rightEye-rightEar' },
+    
+    // Torso connections
+    { start: 5, end: 6, color: '#FFA500', name: 'shoulders' },
+    { start: 5, end: 11, color: '#FFA500', name: 'leftTorso' },
+    { start: 6, end: 12, color: '#FFA500', name: 'rightTorso' },
+    { start: 11, end: 12, color: '#FFA500', name: 'hips' },
+    
+    // Left arm connections
+    { start: 5, end: 7, color: '#FF00FF', name: 'leftUpperArm' },
+    { start: 7, end: 9, color: '#FF00FF', name: 'leftForearm' },
+    
+    // Right arm connections
+    { start: 6, end: 8, color: '#00FFFF', name: 'rightUpperArm' },
+    { start: 8, end: 10, color: '#00FFFF', name: 'rightForearm' },
+    
+    // Left leg connections
+    { start: 11, end: 13, color: '#00FF00', name: 'leftThigh' },
+    { start: 13, end: 15, color: '#00FF00', name: 'leftShin' },
+    
+    // Right leg connections
+    { start: 12, end: 14, color: '#FFFF00', name: 'rightThigh' },
+    { start: 14, end: 16, color: '#FFFF00', name: 'rightShin' },
+  ];
+
   const drawBodyParts = (keypoints) => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
@@ -255,8 +287,41 @@ const BodyTracking = ({ onClose }) => {
     
     canvas.width = videoWidth;
     canvas.height = videoHeight;
+    
+    // Clear canvas (transparent, so video shows through)
     ctx.clearRect(0, 0, videoWidth, videoHeight);
 
+    // Draw thick colored body segments covering the whole body area
+    ctx.lineWidth = 60; // Very thick lines to cover body area
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    SKELETON_CONNECTIONS.forEach(connection => {
+      const startKp = keypoints[connection.start];
+      const endKp = keypoints[connection.end];
+      
+      if (startKp && endKp && 
+          startKp.score >= CONFIDENCE_THRESHOLD && 
+          endKp.score >= CONFIDENCE_THRESHOLD) {
+        
+        const startX = videoWidth - startKp.position.x;
+        const startY = startKp.position.y;
+        const endX = videoWidth - endKp.position.x;
+        const endY = endKp.position.y;
+        
+        // Draw thick colored line with transparency
+        ctx.strokeStyle = connection.color + 'BB'; // Semi-transparent
+        ctx.shadowColor = connection.color;
+        ctx.shadowBlur = 15;
+        
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+      }
+    });
+
+    // Draw large filled circles at each keypoint to cover body parts
     Object.entries(BODY_PARTS).forEach(([partName, indices]) => {
       const color = BODY_COLORS[partName];
       const validKeypoints = indices
@@ -265,53 +330,45 @@ const BodyTracking = ({ onClose }) => {
 
       if (validKeypoints.length === 0) return;
 
+      // Draw large circles covering each body part
+      validKeypoints.forEach(kp => {
+        const x = videoWidth - kp.position.x;
+        const y = kp.position.y;
+        
+        // Determine radius based on body part
+        let radius = 40;
+        if (partName === 'head') radius = 70;
+        else if (partName === 'torso') radius = 80;
+        else if (partName === 'leftArm' || partName === 'rightArm') radius = 45;
+        else if (partName === 'leftLeg' || partName === 'rightLeg') radius = 50;
+        
+        // Draw large shadow/glow
+        ctx.fillStyle = color.fill;
+        ctx.shadowColor = color.stroke;
+        ctx.shadowBlur = 25;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Reset shadow
+        ctx.shadowBlur = 0;
+      });
+
+      // Draw filled polygon connecting keypoints for solid coverage
       if (validKeypoints.length >= 2) {
         ctx.fillStyle = color.fill;
-        ctx.strokeStyle = color.stroke;
-        ctx.lineWidth = 3;
         ctx.beginPath();
         validKeypoints.forEach((kp, i) => {
           const x = videoWidth - kp.position.x;
           const y = kp.position.y;
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
         });
         ctx.closePath();
         ctx.fill();
-        ctx.stroke();
-      }
-
-      validKeypoints.forEach(kp => {
-        const x = videoWidth - kp.position.x;
-        const y = kp.position.y;
-        ctx.fillStyle = color.stroke;
-        ctx.beginPath();
-        ctx.arc(x, y, 6, 0, 2 * Math.PI);
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      });
-    });
-
-    const adjacentKeyPoints = [
-      [5, 6], [5, 7], [7, 9], [6, 8], [8, 10],
-      [5, 11], [6, 12], [11, 12],
-      [11, 13], [13, 15], [12, 14], [14, 16],
-      [0, 1], [0, 2], [1, 3], [2, 4]
-    ];
-
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-    ctx.lineWidth = 2;
-
-    adjacentKeyPoints.forEach(([i, j]) => {
-      const kp1 = keypoints[i];
-      const kp2 = keypoints[j];
-      if (kp1 && kp2 && kp1.score >= CONFIDENCE_THRESHOLD && kp2.score >= CONFIDENCE_THRESHOLD) {
-        ctx.beginPath();
-        ctx.moveTo(videoWidth - kp1.position.x, kp1.position.y);
-        ctx.lineTo(videoWidth - kp2.position.x, kp2.position.y);
-        ctx.stroke();
       }
     });
   };
@@ -379,7 +436,7 @@ const BodyTracking = ({ onClose }) => {
     <div style={styles.container}>
       <div style={styles.header}>
         <h1 style={styles.title}>🎯 Real-Time AR Body Tracking</h1>
-        <p style={styles.subtitle}>Powered by TensorFlow.js PoseNet with Temporal Smoothing</p>
+        <p style={styles.subtitle}>Powered by TensorFlow.js PoseNet with OpenPose Skeleton</p>
         {onClose && (
           <button onClick={onClose} style={styles.closeButton}>
             ← Back to Home
@@ -491,52 +548,40 @@ const BodyTracking = ({ onClose }) => {
       </div>
 
       <div style={styles.info}>
-        <h3 style={styles.infoTitle}>💡 How to Use</h3>
-        <ul style={styles.infoList}>
-          <li>🎥 <strong>Camera:</strong> Make sure you're in a well-lit environment</li>
-          <li>👤 <strong>Position:</strong> Stand back so your full body is visible in the frame</li>
-          <li>🏃 <strong>Movement:</strong> Move slowly at first - larger movements are easier to detect</li>
-          <li>🖥️ <strong>Console:</strong> Press F12 to see detailed movement logs in browser console</li>
-          <li>🎯 <strong>Threshold:</strong> Movement must exceed {MOVEMENT_THRESHOLD}px to be detected (prevents false positives)</li>
-          <li>📈 <strong>Performance:</strong> Analysis runs every {FRAME_SKIP} frames for optimal speed</li>
+        <h3 style={styles.sectionTitle}>📋 Instructions</h3>
+        <ul style={styles.instructionList}>
+          <li>✅ Allow camera access when prompted</li>
+          <li>🎯 Wait for PoseNet model to load (~10-30 seconds)</li>
+          <li>▶️ Click "Start Detection" to begin</li>
+          <li>🚶 Move around - the system tracks 17 body keypoints with OpenPose skeleton</li>
+          <li>� Motion logs appear when movements exceed {MOVEMENT_THRESHOLD}px threshold</li>
+          <li>� Each body part is color-coded with smooth skeleton lines</li>
+          <li>🧹 Use "Clear Log" to reset the motion history</li>
         </ul>
       </div>
 
-      <div style={styles.technicalInfo}>
-        <h4 style={styles.technicalTitle}>⚙️ Technical Specifications</h4>
-        <div style={styles.specs}>
-          <div style={styles.spec}>
-            <strong>Model:</strong> PoseNet MobileNetV1
-          </div>
-          <div style={styles.spec}>
-            <strong>Keypoints:</strong> 17 body points detected
-          </div>
-          <div style={styles.spec}>
-            <strong>Confidence Threshold:</strong> {CONFIDENCE_THRESHOLD}
-          </div>
-          <div style={styles.spec}>
-            <strong>Movement Threshold:</strong> {MOVEMENT_THRESHOLD}px
-          </div>
-          <div style={styles.spec}>
-            <strong>Smoothing Window:</strong> {SMOOTHING_WINDOW} frames
-          </div>
-          <div style={styles.spec}>
-            <strong>Frame Analysis:</strong> Every {FRAME_SKIP} frames
-          </div>
-        </div>
+      <div style={styles.techSpecs}>
+        <h3 style={styles.sectionTitle}>⚙️ Technical Specifications</h3>
+        <ul style={styles.specList}>
+          <li><strong>AI Model:</strong> PoseNet (MobileNetV1, OutputStride: 16)</li>
+          <li><strong>Keypoints Detected:</strong> 17 (head, torso, arms, legs)</li>
+          <li><strong>Confidence Threshold:</strong> {(CONFIDENCE_THRESHOLD * 100).toFixed(0)}%</li>
+          <li><strong>Movement Threshold:</strong> {MOVEMENT_THRESHOLD}px (torso: {(MOVEMENT_THRESHOLD * 1.5).toFixed(1)}px)</li>
+          <li><strong>Temporal Smoothing:</strong> {SMOOTHING_WINDOW}-frame window averaging</li>
+          <li><strong>Performance:</strong> Analysis every {FRAME_SKIP} frames</li>
+          <li><strong>Visualization:</strong> OpenPose-style skeleton with gradient lines</li>
+        </ul>
       </div>
 
-      <div style={styles.extensionsInfo}>
-        <h4 style={styles.extensionsTitle}>🚀 Ready for Extensions</h4>
-        <p style={styles.extensionsText}>
-          This application is structured for easy extension to:
-        </p>
-        <ul style={styles.extensionsList}>
-          <li>👕 <strong>Virtual Clothing Try-On:</strong> Use torso keypoints for garment alignment</li>
-          <li>💪 <strong>Fitness Tracking:</strong> Calculate joint angles and track exercise form</li>
-          <li>🎮 <strong>Gesture Control:</strong> Detect specific pose patterns for interactive experiences</li>
-          <li>🎭 <strong>AR Effects:</strong> Add virtual objects aligned with body parts</li>
-          <li>📊 <strong>Posture Analysis:</strong> Monitor and correct body posture in real-time</li>
+      <div style={styles.extensions}>
+        <h3 style={styles.sectionTitle}>🚀 Possible Extensions</h3>
+        <ul style={styles.extensionList}>
+          <li>👗 <strong>Virtual Try-On:</strong> Overlay 3D clothing models on detected body</li>
+          <li>💪 <strong>Fitness Tracking:</strong> Count reps, track form, analyze exercises</li>
+          <li>🎮 <strong>Gesture Control:</strong> Map body movements to game controls</li>
+          <li>� <strong>Dance Analysis:</strong> Compare poses with reference choreography</li>
+          <li>📸 <strong>Photo Booth:</strong> Trigger capture on specific poses</li>
+          <li>� <strong>Sports Analytics:</strong> Analyze athletic movements and technique</li>
         </ul>
       </div>
     </div>
@@ -546,7 +591,7 @@ const BodyTracking = ({ onClose }) => {
 const styles = {
   container: {
     minHeight: '100vh',
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    background: '#000000',
     padding: '20px',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     color: 'white',
